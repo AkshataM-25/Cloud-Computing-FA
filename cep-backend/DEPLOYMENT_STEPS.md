@@ -84,3 +84,29 @@ pm2 logs cep-backend
 ```bash
 pm2 stop cep-backend
 ```
+
+---
+
+## Optional: Deploying with Docker (used in this project)
+
+Instead of running `node` directly on the EC2 instance, this project also supports
+running the backend inside a Docker container using the `Dockerfile` in `cep-backend/`.
+
+### Build image locally or on EC2
+
+```bash
+cd cep-backend
+docker build -t cep-backend .
+```
+
+### Run container with environment variables
+
+Create a `.env` file (see the "Environment Variables" section above), then:
+
+```bash
+docker run --env-file .env -p 8787:8787 -d --name cep-backend cep-backend
+```
+
+This is the approach used on the EC2 instance so that the backend runs in a
+reproducible containerized environment.
+
