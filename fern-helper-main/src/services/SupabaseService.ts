@@ -26,11 +26,20 @@ class SupabaseService {
 
     // Send user data to the "/user" endpoint
     try {
+      const fullName = (metadata?.username || "").toString().trim();
+      const parts = fullName.split(/\s+/).filter(Boolean);
+      const first_name = (metadata?.first_name || parts[0] || fullName || email.split("@")[0]).toString();
+      const last_name = (metadata?.last_name || parts.slice(1).join(" ") || "").toString();
+
       await axios.post(`${APP_BACKEND_BASE_URL}/user`, {
         user_id: data.user?.id,
         profile_pic_url: null,
         notification_preferences: null,
-        ...metadata,
+        email,
+        username: metadata?.username || fullName || email.split("@")[0],
+        first_name,
+        last_name,
+        location: metadata?.location,
       });
     } catch (postError) {
       console.error("Error creating user in database:", postError);

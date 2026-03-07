@@ -99,9 +99,8 @@ const RegisterPage = () => {
       try {
         const metadata = {
           username: formData.name,
-          mobile: formData.mobile,
           location: formData.address,
-          email: formData.email,
+          mobile: formData.mobile,
         };
 
         const success = await signup(formData.email, formData.password, metadata);
