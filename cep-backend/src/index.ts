@@ -159,13 +159,25 @@ app.post("/plants", upload.single("image"), async (req: Request, res: Response) 
       return res.status(400).json({ error: "Missing plant data" });
     }
 
-    // Generate care recommendations
-    const geminiService = new GeminiService();
-    const careRecommendations = await geminiService.getCareRecommendations(
-      plantData,
-      undefined
-    );
-    plantData.care_recommendations = careRecommendations;
+    // Generate care recommendations, but do not block plant creation if AI fails.
+    let careRecommendations: any = {
+      recommendation: "Care recommendations will be available soon.",
+      fertilizers: [],
+      precautions: [],
+      water_frequency: null,
+    };
+
+    try {
+      const geminiService = new GeminiService();
+      careRecommendations = await geminiService.getCareRecommendations(
+        plantData,
+        undefined
+      );
+      plantData.care_recommendations = careRecommendations;
+    } catch (geminiError) {
+      console.error("Gemini recommendation generation failed, continuing without AI recommendations:", geminiError);
+      plantData.care_recommendations = careRecommendations;
+    }
 
     // Create plant
     const plantService = new PlantService();
@@ -191,10 +203,10 @@ app.post("/plants", upload.single("image"), async (req: Request, res: Response) 
               <h2>Plant Care Recommendations</h2>
               <p><strong>Plant Name:</strong> ${plantData.plant_name}</p>
               <p><strong>Nickname:</strong> ${plantData.nickname || "N/A"}</p>
-              <p><strong>Care Recommendations:</strong> ${careRecommendations.recommendation}</p>
-              <p><strong>Fertilizers:</strong> ${careRecommendations.fertilizers.join(", ")}</p>
-              <p><strong>Precautions:</strong> ${careRecommendations.precautions.join(", ")}</p>
-              <p><strong>Water Frequency:</strong> Every ${careRecommendations.water_frequency} days</p>
+              <p><strong>Care Recommendations:</strong> ${careRecommendations.recommendation || "N/A"}</p>
+              <p><strong>Fertilizers:</strong> ${Array.isArray(careRecommendations.fertilizers) ? careRecommendations.fertilizers.join(", ") : "N/A"}</p>
+              <p><strong>Precautions:</strong> ${Array.isArray(careRecommendations.precautions) ? careRecommendations.precautions.join(", ") : "N/A"}</p>
+              <p><strong>Water Frequency:</strong> ${careRecommendations.water_frequency ? `Every ${careRecommendations.water_frequency} days` : "N/A"}</p>
             </main>
             <footer style="background-color: #f1f1f1; color: #555; text-align: center; padding: 10px; margin-top: 20px;">
               <p>Thank you for using Fern Helper!</p>
