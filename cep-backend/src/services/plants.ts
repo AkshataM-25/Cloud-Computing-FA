@@ -1,7 +1,9 @@
-import Supabase from "./supabase.js";
-import { Data } from "./users.js";
+import { ResultSetHeader, RowDataPacket } from "mysql2";
+import { pool } from "../db/mysql.js";
 
-export interface Plant extends Data {
+export interface Plant {
+  plant_id?: number;
+  user_id: string;
   plant_name: string;
   nickname?: string;
   plant_type: string;
@@ -14,85 +16,90 @@ export interface Plant extends Data {
   sunlight_exposure: string;
   soil_type?: string;
   health_status: string;
-  care_recommendations?: string;
+  care_recommendations?: string | Record<string, unknown>;
+  created_at?: string;
 }
 
 class PlantService {
-  private supabase: Supabase;
-
-  constructor() {
-    this.supabase = new Supabase();
-  }
-
-  get client() {
-    return this.supabase.client;
-  }
-
-  async uploadFile(bucket: string, path: string, file: File | Blob) {
-    return this.supabase.uploadFile(bucket, path, file);
-  }
   async getUserPlants(user_id: string) {
-    const { data, error } = await this.client
-      .from("plants")
-      .select("*")
-      .eq("user_id", user_id)
-      .order("created_at", { ascending: false });
+    const [rows] = await pool.query<RowDataPacket[]>(
+      "SELECT * FROM plants WHERE user_id = ? ORDER BY created_at DESC",
+      [user_id]
+    );
 
-    if (error) {
-      throw error;
-    }
-
-    return data;
+    return rows;
   }
 
   async getPlantById(plant_id: string) {
-    const { data, error } = await this.client
-      .from("plants")
-      .select("*")
-      .eq("plant_id", plant_id)
-      .single();
+    const [rows] = await pool.query<RowDataPacket[]>(
+      "SELECT * FROM plants WHERE plant_id = ? LIMIT 1",
+      [plant_id]
+    );
 
-    if (error) {
-      throw error;
-    }
-
-    return data;
+    return rows[0] || null;
   }
 
-  async createPlant(plantData: Plant, imageFile?: File | Blob) {
-    let imageUrl = plantData.image_url;
+  async createPlant(plantData: Plant) {
+    const careRecommendations =
+      typeof plantData.care_recommendations === "object"
+        ? JSON.stringify(plantData.care_recommendations)
+        : plantData.care_recommendations || null;
 
-    if (imageFile) {
-      const timestamp = Date.now();
-      const filePath = `plants/${plantData.user_id}/${timestamp}-${plantData.plant_name}`;
-      const uploadResult = await this.uploadFile("plant-images", filePath, imageFile);
-      const { data } = await this.client.storage.from('plant-images').getPublicUrl(uploadResult.path);
-      imageUrl = data.publicUrl;
-    }
+    const [insertResult] = await pool.execute<ResultSetHeader>(
+      `INSERT INTO plants (
+        user_id,
+        plant_name,
+        nickname,
+        plant_type,
+        species,
+        image_url,
+        location_in_home,
+        pot_size,
+        acquisition_date,
+        last_watered,
+        sunlight_exposure,
+        soil_type,
+        health_status,
+        care_recommendations
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        plantData.user_id,
+        plantData.plant_name,
+        plantData.nickname || null,
+        plantData.plant_type,
+        plantData.species,
+        plantData.image_url,
+        plantData.location_in_home,
+        plantData.pot_size,
+        plantData.acquisition_date || null,
+        plantData.last_watered,
+        plantData.sunlight_exposure,
+        plantData.soil_type || null,
+        plantData.health_status,
+        careRecommendations,
+      ]
+    );
 
-    const { error } = await this.client
-      .from("plants")
-      .insert([{ ...plantData, image_url: imageUrl }]);
+    const [createdRows] = await pool.query<RowDataPacket[]>(
+      "SELECT * FROM plants WHERE plant_id = ? LIMIT 1",
+      [insertResult.insertId]
+    );
 
-    if (error) {
-      throw error;
-    }
-
-    return true;
+    return createdRows[0] || { plant_id: insertResult.insertId, ...plantData };
   }
 
-  async updateCareRecommendations(plantId: string, careRecommendations: string) {
-    const { error } = await this.client
-      .from("plants")
-      .update({ care_recommendations: careRecommendations })
-      .eq("id", plantId);
+  async updateCareRecommendations(plantId: string, careRecommendations: string | Record<string, unknown>) {
+    const recommendationsToStore =
+      typeof careRecommendations === "object"
+        ? JSON.stringify(careRecommendations)
+        : careRecommendations;
 
-    if (error) {
-      console.error("Error updating care recommendations:", error);
-      throw new Error("Failed to update care recommendations");
-    }
+    await pool.execute(
+      "UPDATE plants SET care_recommendations = ? WHERE plant_id = ?",
+      [recommendationsToStore, plantId]
+    );
 
-    console.log(`Updated care recommendations for plant ID: ${plantId}`);
+    return this.getPlantById(plantId);
   }
 }
 

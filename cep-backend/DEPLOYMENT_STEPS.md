@@ -43,14 +43,37 @@
 Create a `.env` file in the `/home/ubuntu/CEP_Project/cep-backend` directory with:
 ```
 PORT=8787
-SUPABASE_URL=your_supabase_url
-SUPABASE_ANON_KEY=your_supabase_key
 FRONTEND_URL=your_frontend_url
+
+# MySQL (AWS RDS)
+DB_HOST=your_rds_host
+DB_PORT=3306
+DB_NAME=fern_helper
+DB_USER=your_db_user
+DB_PASSWORD=your_db_password
+
+# AWS S3 (images are stored here)
+AWS_REGION=your_aws_region
+AWS_S3_BUCKET=your_s3_bucket
 AWS_ACCESS_KEY_ID=your_aws_key
 AWS_SECRET_ACCESS_KEY=your_aws_secret
-GEMINI_API_KEY=your_gemini_key
+
+# Supabase (used only for /user endpoints)
+SUPABASE_URL=your_supabase_url
+SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+
+# Other API keys
+GOOGLE_API_KEY=your_google_api_key
 RESEND_API_KEY=your_resend_key
 ```
+
+## Data Flow
+
+- Plant image files are uploaded to AWS S3 and only the `image_url` is stored in the database.
+- Plant records are stored in AWS RDS MySQL (`fern_helper` database, `plants` table).
+- Image binary is not stored in MySQL.
+- User endpoints continue using Supabase.
 
 ## Running in Background with PM2 (Recommended)
 

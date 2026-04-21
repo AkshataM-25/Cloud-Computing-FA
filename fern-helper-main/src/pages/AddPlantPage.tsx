@@ -9,6 +9,8 @@ import { useAuth } from "@/contexts/AuthContext";
 const AddPlantPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [submitError, setSubmitError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
     plant_name: "Test Plant",
@@ -39,15 +41,21 @@ const AddPlantPage = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError("");
+    setIsSubmitting(true);
+
     try {
       const response = await addPlant({
         ...formData,
-        user_id: user.id,
+        user_id: user?.id,
       });
       console.log("Plant Added:", response);
       navigate("/my-plants");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to add plant:", error);
+      setSubmitError(error?.message || "Failed to add plant. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -63,6 +71,12 @@ const AddPlantPage = () => {
             </h2>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {submitError && (
+                <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {submitError}
+                </div>
+              )}
+
               <div>
                 <label className="block font-medium mb-1">Plant Name</label>
                 <input
@@ -223,8 +237,8 @@ const AddPlantPage = () => {
                 <Button type="button" variant="ghost" onClick={() => navigate(-1)}>
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-plantcare-green text-white">
-                  Add Plant
+                <Button type="submit" className="bg-plantcare-green text-white" disabled={isSubmitting}>
+                  {isSubmitting ? "Adding..." : "Add Plant"}
                 </Button>
               </div>
             </form>

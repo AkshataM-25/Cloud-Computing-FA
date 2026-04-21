@@ -1,15 +1,21 @@
 import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import multer from "multer";
 import UserService, { User } from "./services/users.js";
 import PlantService, { Plant } from "./services/plants.js";
 import GeminiService from "./services/GeminiService.js";
 import EmailService from "./services/EmailService.js";
+import { uploadToS3 } from "./services/S3Service.js";
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 8787;
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
 
 // Middleware
 app.use(express.json({ limit: "50mb" }));
@@ -112,9 +118,42 @@ app.get("/plants/:id", async (req: Request, res: Response) => {
 });
 
 // Create plant
-app.post("/plants", async (req: Request, res: Response) => {
+app.post("/plants", upload.single("image"), async (req: Request, res: Response) => {
   try {
-    const plantData: Plant = req.body;
+    const parseMaybeJson = (value: unknown) => {
+      if (typeof value !== "string") {
+        return value;
+      }
+
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    };
+
+    let imageUrl = "";
+    if (req.file) {
+      const uploadRes = await uploadToS3(req.file.buffer, req.file.originalname, "plants");
+      imageUrl = uploadRes.url;
+    }
+
+    const plantData: Plant = {
+      user_id: req.body.user_id,
+      plant_name: req.body.plant_name,
+      nickname: req.body.nickname || undefined,
+      plant_type: req.body.plant_type,
+      species: req.body.species,
+      image_url: imageUrl,
+      location_in_home: req.body.location_in_home,
+      pot_size: req.body.pot_size,
+      acquisition_date: req.body.acquisition_date || undefined,
+      last_watered: req.body.last_watered,
+      sunlight_exposure: req.body.sunlight_exposure,
+      soil_type: req.body.soil_type || undefined,
+      health_status: req.body.health_status,
+      care_recommendations: parseMaybeJson(req.body.care_recommendations),
+    };
 
     if (!plantData.user_id) {
       return res.status(400).json({ error: "Missing plant data" });
@@ -124,13 +163,13 @@ app.post("/plants", async (req: Request, res: Response) => {
     const geminiService = new GeminiService();
     const careRecommendations = await geminiService.getCareRecommendations(
       plantData,
-      undefined  // No file upload for now, images come as base64 in body
+      undefined
     );
     plantData.care_recommendations = careRecommendations;
 
     // Create plant
     const plantService = new PlantService();
-    const newPlant = await plantService.createPlant(plantData, undefined);
+    const newPlant = await plantService.createPlant(plantData);
 
     if (!newPlant) {
       return res.status(500).json({ error: "Failed to create plant" });
