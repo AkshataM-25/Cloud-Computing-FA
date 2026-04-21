@@ -17,11 +17,49 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
+const configuredOrigins = [
+  process.env.FRONTEND_URL,
+  ...(process.env.FRONTEND_URLS || "").split(",").map((origin) => origin.trim()),
+].filter((origin): origin is string => Boolean(origin));
+
+const allowedStaticOrigins = new Set<string>([
+  ...configuredOrigins,
+  "http://localhost:8080",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://fern-helper-frontend-12345.s3-website.ap-south-1.amazonaws.com",
+]);
+
+const allowedDynamicOriginPatterns = [
+  /^https?:\/\/fernfrontendalb-[a-z0-9-]+\.ap-south-1\.elb\.amazonaws\.com$/i,
+  /^https?:\/\/fernfrontendalb-[a-z0-9-]+\.ap-south-1\.elb\.amazonaws\.com:\d+$/i,
+];
+
+const corsOriginValidator = (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+  if (!origin) {
+    callback(null, true);
+    return;
+  }
+
+  if (allowedStaticOrigins.has(origin)) {
+    callback(null, true);
+    return;
+  }
+
+  const isDynamicOriginAllowed = allowedDynamicOriginPatterns.some((pattern) => pattern.test(origin));
+  if (isDynamicOriginAllowed) {
+    callback(null, true);
+    return;
+  }
+
+  callback(new Error(`CORS blocked for origin: ${origin}`));
+};
+
 // Middleware
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:8080",
+  origin: corsOriginValidator,
   methods: ["GET", "POST", "PUT", "DELETE"],
   allowedHeaders: ["Content-Type"],
   credentials: true,
